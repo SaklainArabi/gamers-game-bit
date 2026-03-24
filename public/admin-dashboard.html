@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="logo">
+                <i class="fas fa-gamepad"></i> Gamers' Gambit - Admin
+            </a>
+            <div class="nav-links">
+                <a href="index.html">Home</a>
+                <a href="about.html">About</a>
+                <a href="contact.html">Contact</a>
+                <a href="help.html">Help</a>
+                <span id="adminInfo" style="color: white; margin-left: 1rem;"></span>
+                <button onclick="logout()" class="btn btn-small btn-danger">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="dashboard">
+            <h1><i class="fas fa-user-shield"></i> Admin Dashboard</h1>
+
+            <div class="tabs">
+                <button class="tab-btn active" onclick="showTab('users')"><i class="fas fa-users"></i> Manage Users</button>
+                <button class="tab-btn" onclick="showTab('listings')"><i class="fas fa-list"></i> Manage Listings</button>
+                <button class="tab-btn" onclick="showTab('addGame')"><i class="fas fa-plus"></i> Add Game</button>
+                <button class="tab-btn" onclick="showTab('balanceRequests')"><i class="fas fa-coins"></i> Balance Requests</button>
+                <button class="tab-btn" onclick="showTab('helpQuestions')"><i class="fas fa-question-circle"></i> Help Questions</button>
+            </div>
+
+            <div id="users" class="tab-content active">
+                <h2>User Management</h2>
+                <div id="usersList"></div>
+            </div>
+
+            <div id="listings" class="tab-content">
+                <h2>Listing Management</h2>
+                <div id="listingsList"></div>
+            </div>
+
+            <div id="addGame" class="tab-content">
+                <h2><i class="fas fa-gamepad"></i> Add Game for Sale</h2>
+                <form id="addGameForm" class="form-card">
+                    <div class="form-group">
+                        <label>Game Name</label>
+                        <input type="text" id="gameName" required placeholder="Enter game name">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="gameDescription" required placeholder="Enter game description"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Price ($)</label>
+                        <input type="number" id="gamePrice" step="0.01" min="0.01" required placeholder="29.99">
+                    </div>
+                    <div class="form-group">
+                        <label>Game Key</label>
+                        <input type="text" id="gameKey" required placeholder="XXXX-XXXX-XXXX-XXXX">
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Game</button>
+                </form>
+            </div>
+
+            <div id="balanceRequests" class="tab-content">
+                <h2><i class="fas fa-coins"></i> Balance Addition Requests</h2>
+                <div id="balanceRequestsList"></div>
+            </div>
+
+            <div id="helpQuestions" class="tab-content">
+                <h2><i class="fas fa-question-circle"></i> Help Questions</h2>
+                <p style="margin-bottom: 1rem; color: var(--gray);">Answer user questions from the Help Center</p>
+                <div id="helpQuestionsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentAdmin = null;
+
+        async function checkAuth() {
+            const response = await fetch('/api/check-session');
+            const data = await response.json();
+            
+            if (!data.success || data.user.type !== 'admin') {
+                window.location.href = 'admin-login.html';
+                return;
+            }
+            
+            currentAdmin = data.user;
+            document.getElementById('adminInfo').textContent = `Admin: ${currentAdmin.username}`;
+            loadUsers();
+        }
+
+        async function loadUsers() {
+            const response = await fetch('/api/admin/users');
+            const data = await response.json();
+            
+            const usersList = document.getElementById('usersList');
+            usersList.innerHTML = '';
+            
+            if (data.users.length === 0) {
+                usersList.innerHTML = '<p>No users found.</p>';
+                return;
+            }
+            
+            const table = document.createElement('table');
+            table.className = 'admin-table';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Balance</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody"></tbody>
+            `;
+            usersList.appendChild(table);
+            
+            const tbody = document.getElementById('usersTableBody');
+            data.users.forEach(user => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${user.user_id}</td>
+                    <td>${user.username}</td>
+                    <td>${user.email}</td>
+                    <td>$${user.balance}</td>
+                    <td>${user.is_restricted ? '<span class="status-restricted">Restricted</span>' : '<span class="status-active">Active</span>'}</td>
+                    <td>
+                        ${user.is_restricted 
+                            ? `<button onclick="restrictUser(${user.user_id}, false)" class="btn btn-success btn-small">Unrestrict</button>`
+                            : `<button onclick="restrictUser(${user.user_id}, true)" class="btn btn-danger btn-small">Restrict</button>`
+                        }
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        async function loadListings() {
+            const response = await fetch('/api/admin/listings');
+            const data = await response.json();
+            
+            const listingsList = document.getElementById('listingsList');
+            listingsList.innerHTML = '';
+            
+            if (data.listings.length === 0) {
+                listingsList.innerHTML = '<p>No listings found.</p>';
+                return;
+            }
+            
+            const table = document.createElement('table');
+            table.className = 'admin-table';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Game Name</th>
+                        <th>Seller</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                        <th>Approved</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="listingsTableBody"></tbody>
+            `;
+            listingsList.appendChild(table);
+            
+            const tbody = document.getElementById('listingsTableBody');
+            data.listings.forEach(listing => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${listing.listing_id}</td>
+                    <td>${listing.game_name}</td>
+                    <td>${listing.seller_name}</td>
+                    <td>$${listing.price}</td>
+                    <td><span class="status-${listing.status.toLowerCase()}">${listing.status}</span></td>
+                    <td>${listing.admin_approved ? '✅ Yes' : '❌ No'}</td>
+                    <td>
+                        ${!listing.admin_approved && listing.status === 'AVAILABLE'
+                            ? `<button onclick="approveListing(${listing.listing_id}, true)" class="btn btn-success btn-small">Approve</button>
+                               <button onclick="approveListing(${listing.listing_id}, false)" class="btn btn-danger btn-small">Reject</button>`
+                            : listing.admin_approved && listing.status === 'AVAILABLE'
+                            ? `<button onclick="approveListing(${listing.listing_id}, false)" class="btn btn-danger btn-small">Disapprove</button>`
+                            : 'N/A'
+                        }
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        async function restrictUser(userId, restrict) {
+            const action = restrict ? 'restrict' : 'unrestrict';
+            if (!confirm(`Are you sure you want to ${action} this user?`)) return;
+            
+            const response = await fetch('/api/admin/restrict-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, restrict })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                alert(data.message);
+                loadUsers();
+            } else {
+                alert(data.message);
+            }
+        }
+
+        async function approveListing(listingId, approve) {
+            const action = approve ? 'approve' : 'disapprove';
+            if (!confirm(`Are you sure you want to ${action} this listing?`)) return;
+            
+            const response = await fetch('/api/admin/approve-listing', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ listingId, approve })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                alert(data.message);
+                loadListings();
+            } else {
+                alert(data.message);
+            }
+        }
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+            
+            if (tabName === 'users') loadUsers();
+            if (tabName === 'listings') loadListings();
+            if (tabName === 'balanceRequests') loadBalanceRequests();
+            if (tabName === 'helpQuestions') loadHelpQuestions();
+        }
+
+        // Load Help Questions
+        async function loadHelpQuestions() {
+            const response = await fetch('/api/admin/help-questions');
+            const data = await response.json();
+            
+            const list = document.getElementById('helpQuestionsList');
+            list.innerHTML = '';
+            
+            if (!data.questions || data.questions.length === 0) {
+                list.innerHTML = '<p>No questions found.</p>';
+                return;
+            }
+            
+            data.questions.forEach(q => {
+                const card = document.createElement('div');
+                card.style.cssText = 'background: white; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05);';
+                
+                const isAnswered = q.answer !== null;
+                const statusBadge = isAnswered 
+                    ? '<span class="status-approved">Answered</span>' 
+                    : '<span class="status-pending">Pending</span>';
+                
+                card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <strong style="color: var(--primary);"><i class="fas fa-user"></i> ${q.username}</strong>
+                        ${statusBadge}
+                    </div>
+                    <p style="color: var(--dark); margin-bottom: 0.5rem;"><strong>Question:</strong> ${q.question}</p>
+                    <small style="color: var(--gray);">Asked: ${new Date(q.created_at).toLocaleString()}</small>
+                    ${isAnswered 
+                        ? `<div style="background: var(--light); padding: 1rem; border-radius: 8px; margin-top: 1rem;">
+                             <p style="color: var(--success);"><strong>Answer:</strong> ${q.answer}</p>
+                           </div>` 
+                        : `<div style="margin-top: 1rem;">
+                             <textarea id="answer-${q.question_id}" rows="3" placeholder="Type your answer..." style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                             <button onclick="answerQuestion(${q.question_id})" class="btn btn-success btn-small" style="margin-top: 0.5rem;">Submit Answer</button>
+                           </div>`
+                    }
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        // Answer a Question
+        async function answerQuestion(questionId) {
+            const answer = document.getElementById(`answer-${questionId}`).value;
+            
+            if (!answer.trim()) {
+                alert('Please enter an answer');
+                return;
+            }
+            
+            const response = await fetch('/api/admin/answer-question', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ questionId, answer })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                alert('Answer submitted successfully!');
+                loadHelpQuestions();
+            } else {
+                alert(data.message || 'Error submitting answer');
+            }
+        }
+
+        // Add Game Form Handler
+        document.getElementById('addGameForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const gameName = document.getElementById('gameName').value;
+            const description = document.getElementById('gameDescription').value;
+            const price = parseFloat(document.getElementById('gamePrice').value);
+            const gameKey = document.getElementById('gameKey').value;
+            
+            const response = await fetch('/api/admin/create-listing', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gameName, description, price, gameKey })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                alert('Game added successfully!');
+                document.getElementById('addGameForm').reset();
+            } else {
+                alert(data.message || 'Error adding game');
+            }
+        });
+
+        // Load Balance Requests
+        async function loadBalanceRequests() {
+            const response = await fetch('/api/admin/balance-requests');
+            const data = await response.json();
+            
+            const requestsList = document.getElementById('balanceRequestsList');
+            requestsList.innerHTML = '';
+            
+            if (!data.requests || data.requests.length === 0) {
+                requestsList.innerHTML = '<p>No balance requests found.</p>';
+                return;
+            }
+            
+            const table = document.createElement('table');
+            table.className = 'admin-table';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Requested At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="balanceRequestsTableBody"></tbody>
+            `;
+            requestsList.appendChild(table);
+            
+            const tbody = document.getElementById('balanceRequestsTableBody');
+            data.requests.forEach(request => {
+                const row = document.createElement('tr');
+                const statusClass = request.status === 'PENDING' ? 'status-pending' : 
+                                   request.status === 'APPROVED' ? 'status-approved' : 'status-rejected';
+                row.innerHTML = `
+                    <td>${request.request_id}</td>
+                    <td>${request.username}</td>
+                    <td>${request.email}</td>
+                    <td>$${parseFloat(request.amount).toFixed(2)}</td>
+                    <td><span class="${statusClass}">${request.status}</span></td>
+                    <td>${new Date(request.created_at).toLocaleString()}</td>
+                    <td>
+                        ${request.status === 'PENDING'
+                            ? `<button onclick="processBalanceRequest(${request.request_id}, true)" class="btn btn-success btn-small">Approve</button>
+                               <button onclick="processBalanceRequest(${request.request_id}, false)" class="btn btn-danger btn-small">Reject</button>`
+                            : 'Processed'
+                        }
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Process Balance Request
+        async function processBalanceRequest(requestId, approve) {
+            const action = approve ? 'approve' : 'reject';
+            if (!confirm(`Are you sure you want to ${action} this balance request?`)) return;
+            
+            const response = await fetch('/api/admin/process-balance-request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requestId, approve })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                alert(data.message);
+                loadBalanceRequests();
+            } else {
+                alert(data.message || 'Error processing request');
+            }
+        }
+
+        async function logout() {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = 'index.html';
+        }
+
+        checkAuth();
+    </script>
+</body>
+</html>
