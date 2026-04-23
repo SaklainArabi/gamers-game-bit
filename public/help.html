@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help Center - Gamers' Gambit</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="logo">
+                <i class="fas fa-gamepad"></i> Gamers' Gambit
+            </a>
+            <div class="nav-links">
+                <a href="index.html">Home</a>
+                <a href="about.html">About</a>
+                <a href="contact.html">Contact Us</a>
+                <a href="help.html">Help</a>
+            </div>
+        </div>
+    </nav>
+
+    <section class="hero" style="padding: 60px 0;">
+        <div class="container">
+            <h1><i class="fas fa-question-circle"></i> Help Center</h1>
+            <p>Ask questions and get help from our admins</p>
+        </div>
+    </section>
+
+    <section class="features">
+        <div class="container">
+            <!-- Login Prompt for non-logged users -->
+            <div id="loginPrompt" style="text-align: center; margin-bottom: 2rem; display: none;">
+                <p style="color: var(--gray); margin-bottom: 1rem;">Please login to ask questions</p>
+                <a href="login.html" class="btn btn-primary"><i class="fas fa-sign-in-alt"></i> Login</a>
+                <a href="register.html" class="btn btn-secondary"><i class="fas fa-user-plus"></i> Register</a>
+            </div>
+
+            <!-- Ask Question Form -->
+            <div id="askQuestionSection" style="max-width: 700px; margin: 0 auto 2rem auto; display: none;">
+                <div class="form-container" style="margin: 0; max-width: 100%;">
+                    <h2><i class="fas fa-question"></i> Ask a Question</h2>
+                    <form id="askQuestionForm">
+                        <div class="form-group">
+                            <label>Your Question</label>
+                            <textarea id="questionText" rows="4" required placeholder="Type your question here..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">
+                            <i class="fas fa-paper-plane"></i> Submit Question
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Questions List -->
+            <div style="max-width: 800px; margin: 0 auto;">
+                <h2 style="margin-bottom: 1.5rem; color: var(--dark);"><i class="fas fa-list"></i> Questions & Answers</h2>
+                <div id="questionsList"></div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        let currentUser = null;
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/check-session');
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentUser = data.user;
+                    document.getElementById('askQuestionSection').style.display = 'block';
+                    document.getElementById('loginPrompt').style.display = 'none';
+                } else {
+                    document.getElementById('askQuestionSection').style.display = 'none';
+                    document.getElementById('loginPrompt').style.display = 'block';
+                }
+            } catch (error) {
+                document.getElementById('loginPrompt').style.display = 'block';
+            }
+            loadQuestions();
+        }
+
+        async function loadQuestions() {
+            try {
+                const response = await fetch('/api/help/questions');
+                const data = await response.json();
+                
+                const list = document.getElementById('questionsList');
+                list.innerHTML = '';
+                
+                if (!data.questions || data.questions.length === 0) {
+                    list.innerHTML = '<p style="text-align: center; color: var(--gray);">No questions yet. Be the first to ask!</p>';
+                    return;
+                }
+                
+                data.questions.forEach(q => {
+                    const card = document.createElement('div');
+                    card.className = 'help-question-card';
+                    card.style.cssText = 'background: white; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 5px 15px rgba(0,0,0,0.05);';
+                    
+                    let answerHtml = '';
+                    if (q.answer) {
+                        answerHtml = `
+                            <div style="background: var(--light); padding: 1rem; border-radius: 8px; margin-top: 1rem; border-left: 4px solid var(--success);">
+                                <p style="color: var(--success); font-weight: bold; margin-bottom: 0.5rem;">
+                                    <i class="fas fa-check-circle"></i> Admin Answer:
+                                </p>
+                                <p style="color: var(--dark);">${q.answer}</p>
+                                <small style="color: var(--gray);">Answered on ${new Date(q.answered_at).toLocaleString()}</small>
+                            </div>
+                        `;
+                    } else {
+                        answerHtml = `
+                            <div style="background: #fff3cd; padding: 1rem; border-radius: 8px; margin-top: 1rem; border-left: 4px solid var(--warning);">
+                                <p style="color: #856404;"><i class="fas fa-clock"></i> Waiting for admin response...</p>
+                            </div>
+                        `;
+                    }
+                    
+                    card.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div>
+                                <p style="color: var(--primary); font-weight: bold; margin-bottom: 0.5rem;">
+                                    <i class="fas fa-user"></i> ${q.username}
+                                </p>
+                                <p style="color: var(--dark); font-size: 1.1rem;">${q.question}</p>
+                            </div>
+                            <small style="color: var(--gray); white-space: nowrap;">${new Date(q.created_at).toLocaleDateString()}</small>
+                        </div>
+                        ${answerHtml}
+                    `;
+                    list.appendChild(card);
+                });
+            } catch (error) {
+                document.getElementById('questionsList').innerHTML = '<p style="text-align: center; color: var(--danger);">Error loading questions</p>';
+            }
+        }
+
+        document.getElementById('askQuestionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const question = document.getElementById('questionText').value;
+            
+            try {
+                const response = await fetch('/api/help/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Question submitted successfully! An admin will answer soon.');
+                    document.getElementById('questionText').value = '';
+                    loadQuestions();
+                } else {
+                    alert(data.message || 'Error submitting question');
+                }
+            } catch (error) {
+                alert('Error submitting question');
+            }
+        });
+
+        checkAuth();
+    </script>
+</body>
+</html>
